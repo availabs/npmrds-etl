@@ -5,7 +5,7 @@
 1. Bash
 2. Node.js 8.x.x
   
-  NOTE: To use the latest version of Node.js, we recommend (n)[https://github.com/tj/n].
+  NOTE: To use the latest version of Node.js, we recommend [n](https://github.com/tj/n).
 
 NOTE: The following scripts assume the data will be from within the same year.
 
