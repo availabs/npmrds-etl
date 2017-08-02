@@ -33,17 +33,21 @@ let curRow = {}
 let curDate = 0
 let curEpoch
 
+const roundTimes = (row) => {
+  Object.entries(row).forEach(([k,v]) => {
+    if (k.match(travelTimeRE) && v) {
+      row[k] = Math.round(v)
+    }
+  })
+}
+
 const transformStream = through(
   function write(data) {
     const tmc = data.tmc_code.toUpperCase()
 
     if (curRow.tmc !== tmc) {
-      Object.entries(curRow).forEach(([k,v]) => {
-        if (k.match(travelTimeRE) && v) {
-          curRow[k] = Math.round(v)
-        }
-      })
       if (curRow.tmc) {
+        roundTimes(curRow)
         this.emit('data', curRow)
       }
       curRow = {}
@@ -87,6 +91,7 @@ const transformStream = through(
   },
 
   function end () {
+    roundTimes(curRow)
     this.emit('data', curRow)
     this.emit('end')
   }
