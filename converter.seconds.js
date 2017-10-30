@@ -14,14 +14,17 @@ const vehicleTypes = {
 }
 
 const csvInputStream = csv({
-    headers: [
-      'datasource',
-      'tmc_code',
-      'measurement_tstamp',
-      'speed',
-      'travel_time_minutes',
-      'data_density'
-    ],
+    // headers: [
+      // 'datasource',
+      // 'tmc_code',
+      // 'measurement_tstamp',
+      // 'speed',
+      // 'average_speed',
+      // 'reference_speed',
+      // 'travel_time_seconds',
+      // 'data_density'
+    // ],
+    headers: true,
   }).on("data", function(data){
     this.emit(data)
   })
@@ -44,6 +47,10 @@ const roundTimes = (row) => {
 const transformStream = through(
   function write(data) {
     const tmc = data.tmc_code.toUpperCase()
+    // const tmc = data.tmc_code
+
+    let prevTMC = curRow.tmc
+    let checkTMC = true
 
     if (curRow.tmc !== tmc) {
       if (curRow.tmc) {
@@ -56,11 +63,12 @@ const transformStream = through(
     const timestamp = moment(data.measurement_tstamp, 'YYYY-MM-DD HH:mm:ss')
 
     const date = +timestamp.format('YYYYMMDD')
-    assert(curDate <= date)
+    assert(curDate <= date, `curDate: ${curDate} | date: ${date}\n${JSON.stringify(data, null, 4)}`)
 
     if (date !== curDate) {
       curDate = date
       curEpoch = 0
+      checkTMC = false
     }
 
     const mmtMidnight = moment(timestamp).startOf('day');
@@ -69,8 +77,13 @@ const transformStream = through(
     assert(!(minutesIntoDay % 5))
 
     const epoch = Math.round(minutesIntoDay / 5)
-    assert(curEpoch <= epoch)
-    assert((epoch >= 0) && (epoch < 288))
+
+    if (checkTMC && (epoch === curEpoch)) {
+      assert(prevTMC <= tmc, 'TMCs not sorted');
+    }
+
+    assert(curEpoch <= epoch, 'Input data not sorted.')
+    assert((epoch >= 0) && (epoch < 288), `EPOCH ${epoch} is out of the domain [0,287]`)
 
     curEpoch = epoch
 
@@ -78,16 +91,21 @@ const transformStream = through(
 
     const vehicleType = vehicleTypes[data.datasource.trim()]
 
-    assert(!!vehicleType)
+    assert(!!vehicleType, `Unrecognized datasource: ${data.datasource}`)
 
-    const ttA = data.travel_time_minutes && (data.travel_time_minutes * 60)
+    // For when we mutate the TMC codes
+    const ttA = data.travel_time_seconds
     const ttB = curRow[`travel_time_${vehicleType}`]
 
     const ttC = (ttA && ttB)
-      ? (ttA + ttB)
-      : (ttA || ttB)
+      ? +(+ttA + +ttB)
+      : +(+ttA || +ttB)
 
     curRow[`travel_time_${vehicleType}`] = ttC
+    assert(Number.isFinite(ttC), `ttA: ${ttA}, ttB: ${ttB}, ttC: ${ttC}\n\n${JSON.stringify(curRow, null, 4)}\n---------------\n${JSON.stringify(data, null, 4)}`)
+    // assert(!curRow[`travel_time_${vehicleType}`], `curRow[travel_time_${vehicleType}] was not empty`)
+
+    // curRow[`travel_time_${vehicleType}`] = data.travel_time_seconds
   },
 
   function end () {
